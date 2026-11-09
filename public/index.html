@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omox Tlaxcalli · Tu tutor que te enseña a pensar</title>
+<meta name="description" content="Omox Tlaxcalli es un asistente virtual con IA que enseña con pistas y preguntas, se adapta a tu forma de aprender y no hace la tarea por ti.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="greca" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand">
+    <div class="brand-avatar" id="brandAvatar" aria-hidden="true"></div>
+    <div>
+      <h1>Omox Tlaxcalli</h1>
+      <p class="tag">Tu tutor que te enseña a pensar</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span class="badge" id="engineBadge" title="Motor de IA en uso">IA: conectando…</span>
+    <button class="btn ghost" id="btnPrivacy" type="button">Privacidad y ética</button>
+    <button class="btn ghost" id="btnReset" type="button">Nueva sesión</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="chat-col" aria-label="Conversación con Omox">
+    <div class="modes" role="tablist" aria-label="Modo de aprendizaje">
+      <button class="mode active" id="modeLearn" role="tab" aria-selected="true" type="button">
+        <strong>Aprende con Omox</strong><span>Te guía con pistas</span>
+      </button>
+      <button class="mode" id="modeTeach" role="tab" aria-selected="false" type="button">
+        <strong>Enséñale a Omox</strong><span>Tú eres el maestro</span>
+      </button>
+    </div>
+
+    <div class="chat" id="chat" role="log" aria-live="polite" aria-label="Mensajes"></div>
+
+    <div class="chips" id="chips" aria-label="Respuestas rápidas"></div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <div class="formats" role="group" aria-label="Formato de explicación">
+        <button type="button" class="fmt" data-fmt="visual" title="Pide un esquema">🖼 Esquema</button>
+        <button type="button" class="fmt" data-fmt="auditivo" title="Escucha la explicación">🔊 Escuchar</button>
+        <button type="button" class="fmt" data-fmt="kinestesico" title="Pide una actividad">✍ Practicar</button>
+      </div>
+      <div class="row">
+        <textarea id="input" rows="1" maxlength="1500" placeholder="Escribe tu duda o tu respuesta…" aria-label="Tu mensaje"></textarea>
+        <button type="button" class="icon" id="btnMic" title="Dictar con tu voz" aria-label="Dictar con tu voz">🎤</button>
+        <button type="submit" class="send" id="btnSend">Enviar</button>
+      </div>
+      <p class="hint-line">Omox es una IA y puede equivocarse. Verifica lo importante con tu libro o tu maestro/a. No escribas datos personales.</p>
+    </form>
+  </section>
+
+  <aside class="panel" aria-label="Panel de Omox">
+    <div class="avatar-wrap">
+      <div id="avatar" class="avatar" aria-hidden="true"></div>
+      <div class="status" id="status">Listo para ayudarte</div>
+    </div>
+
+    <section class="card">
+      <h2>Escalera de pistas</h2>
+      <ol class="ladder" id="ladder">
+        <li data-l="0"><b>0</b> Diagnóstico</li>
+        <li data-l="1"><b>1</b> Pregunta guía</li>
+        <li data-l="2"><b>2</b> Pista</li>
+        <li data-l="3"><b>3</b> Ejemplo parecido</li>
+        <li data-l="4"><b>4</b> Método paso a paso</li>
+      </ol>
+      <p class="small" id="ladderNote">Omox nunca te da el resultado final; sube un escalón solo si lo necesitas.</p>
+    </section>
+
+    <section class="card">
+      <h2>Comprensión <span class="topic" id="topic"></span></h2>
+      <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="meterBar"><div id="meterFill"></div></div>
+      <p class="small" id="meterText">Aún no hay datos. Empieza con un tema.</p>
+      <div class="missing" id="missing" hidden></div>
+    </section>
+
+    <section class="card">
+      <h2>Tu forma de aprender</h2>
+      <div class="bars" id="styleBars">
+        <div><label>🖼 Visual</label><div class="bar"><i id="sv"></i></div></div>
+        <div><label>🔊 Auditivo</label><div class="bar"><i id="sa"></i></div></div>
+        <div><label>✍ Kinestésico</label><div class="bar"><i id="sk"></i></div></div>
+      </div>
+      <p class="small" id="styleText">Omox lo descubre mientras conversan; no hay examen.</p>
+    </section>
+
+    <section class="card">
+      <h2>Transparencia de la IA</h2>
+      <p class="small" id="transparency">Confianza de la última respuesta: —</p>
+      <p class="verify" id="verify" hidden></p>
+    </section>
+  </aside>
+</main>
+
+<dialog id="dlgStart">
+  <form method="dialog" id="startForm">
+    <div class="dlg-avatar" id="dlgAvatar" aria-hidden="true"></div>
+    <h2>¡Hola! Soy Omox</h2>
+    <p>Te ayudo a <b>entender</b> tus temas con pistas y preguntas. No hago la tarea por ti, pero sí te enseño a resolverla.</p>
+    <p class="small">Solo necesito dos datos para adaptar mi lenguaje. <b>No pido nombre, escuela ni contacto.</b></p>
+    <label>Edad
+      <input type="number" id="age" min="10" max="25" value="16" required>
+    </label>
+    <label>Nivel de estudios
+      <select id="level">
+        <option value="secundaria">Secundaria</option>
+        <option value="preparatoria" selected>Preparatoria</option>
+        <option value="universidad">Universidad</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="consent" required> Entiendo que Omox es una inteligencia artificial, que puede equivocarse y que debo verificar la información importante.</label>
+    <button class="send" id="btnStart" type="submit">Comenzar</button>
+  </form>
+</dialog>
+
+<dialog id="dlgPrivacy">
+  <div class="dlg-body">
+    <h2>Privacidad y uso responsable de IA</h2>
+    <ul>
+      <li><b>Datos:</b> solo se usan tu edad y nivel de estudios para adaptar las explicaciones. No se pide nombre, escuela, teléfono ni correo.</li>
+      <li><b>Conversaciones:</b> no se guardan en ninguna base de datos. Se envían al modelo de IA para generar la respuesta y se borran al cerrar la sesión.</li>
+      <li><b>Transparencia:</b> las respuestas las genera un modelo de lenguaje (Gemini, de Google). Omox indica su nivel de confianza y qué debes verificar.</li>
+      <li><b>No sustituye a tu maestro/a:</b> sirve para comprender; la última palabra la tiene tu docente.</li>
+      <li><b>Sin trampa:</b> Omox no resuelve tareas completas ni exámenes; te guía para que lo hagas tú.</li>
+      <li><b>Originalidad:</b> el personaje Omox y el diseño son creaciones originales del equipo. No se usa material con derechos de autor sin autorización.</li>
+    </ul>
+    <form method="dialog"><button class="send">Entendido</button></form>
+  </div>
+</dialog>
+
+<script src="demo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
