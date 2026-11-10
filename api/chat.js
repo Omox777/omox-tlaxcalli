@@ -6,7 +6,9 @@ const { SYSTEM_PROMPT, RESPONSE_SCHEMA } = require('./prompt');
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 // Si el modelo principal no está disponible para la clave (403/404/429/503), se prueba el siguiente.
-const MODELS = [MODEL, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'].filter((m, i, a) => a.indexOf(m) === i);
+const MODELS = [MODEL, 'gemini-3.5-flash-lite', 'gemini-flash-latest'].filter((m, i, a) => a.indexOf(m) === i);
+const ATTEMPT_MS = 11000;  // tiempo máximo por intento a un modelo
+const DEADLINE_MS = 20000; // no se inician intentos nuevos después de este tiempo
 const MAX_MSGS = 14;
 const MAX_CHARS = 1500;
 const LEVELS = ['secundaria', 'preparatoria', 'universidad'];
@@ -135,20 +137,39 @@ async function handler(req, res) {
   try {
     let r = null;
     const failures = [];
+    const started = Date.now();
+    // Cada intento tiene tiempo límite: si el modelo no responde, se pasa al siguiente.
+    const callModel = async (model) => {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), ATTEMPT_MS);
+      try {
+        return await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+            body: JSON.stringify(payload),
+            signal: ctl.signal,
+          }
+        );
+      } catch (e) {
+        return { ok: false, status: 504, json: async () => ({ error: { status: 'TIMEOUT', message: 'sin respuesta a tiempo' } }) };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
     for (const model of MODELS) {
-      r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          body: JSON.stringify(payload),
-        }
-      );
+      if (Date.now() - started > DEADLINE_MS) break;
+      r = await callModel(model);
+      if (r.status === 503 && Date.now() - started < DEADLINE_MS - ATTEMPT_MS) { // alta demanda: un reintento breve
+        await new Promise((ok) => setTimeout(ok, 700));
+        r = await callModel(model);
+      }
       if (r.ok) break;
       let detail = '';
       try { const e = await r.json(); detail = String((e.error && (e.error.status + ': ' + e.error.message)) || '').slice(0, 220); } catch (e) { /* sin detalle */ }
       failures.push({ model, status: r.status, detail });
-      if (![403, 404, 429, 503].includes(r.status)) break;
+      if (![403, 404, 429, 503, 504].includes(r.status)) break;
     }
     if (!r || !r.ok) {
       res.statusCode = 502;

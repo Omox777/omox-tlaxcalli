@@ -39,6 +39,7 @@ PRIVACIDAD Y SEGURIDAD
 
 FORMATO DE SALIDA
 Responde SIEMPRE con un único objeto JSON válido según el esquema. En "reply" puedes usar **negritas** y listas con "- ". Sin otro texto fuera del JSON.
+- No uses LaTeX ni signos de dólar. Escribe las fórmulas en texto plano con símbolos normales (por ejemplo: a² + b² = c², F = m · a, H₂SO₄, √25).
 - diagram: solo cuando ayude (pasos de un proceso o relación de ideas); 2 a 6 pasos con label corto y detail de una frase; si no aplica, steps=[] y title="".
 - practice: un mini reto (una sola pregunta) para que el estudiante haga algo; cadena vacía si no aplica.
 - quick_replies: hasta 3 respuestas cortas que el estudiante podría tocar (por ejemplo "No entiendo", "Dame otra pista", "Ya lo tengo").

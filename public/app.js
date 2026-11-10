@@ -190,7 +190,9 @@
     };
     if (!S.demo) {
       try {
-        const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const post = () => fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        let r = await post();
+        if (r.status === 502 || r.status === 504) r = await post(); // un reintento automático ante fallo temporal
         if (r.ok) return await r.json();
         if (r.status === 503 || r.status === 404) { setDemo(true); }
         else if (r.status === 429) throw new Error('Vas muy rápido 😅 Espera unos segundos y vuelve a intentar.');
