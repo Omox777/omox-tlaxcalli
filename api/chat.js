@@ -5,6 +5,8 @@
 const { SYSTEM_PROMPT, RESPONSE_SCHEMA } = require('./prompt');
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+// Si el modelo principal no está disponible para la clave (403/404/429/503), se prueba el siguiente.
+const MODELS = [MODEL, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'].filter((m, i, a) => a.indexOf(m) === i);
 const MAX_MSGS = 14;
 const MAX_CHARS = 1500;
 const LEVELS = ['secundaria', 'preparatoria', 'universidad'];
@@ -131,17 +133,26 @@ async function handler(req, res) {
   }
 
   try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(payload),
-      }
-    );
-    if (!r.ok) {
+    let r = null;
+    const failures = [];
+    for (const model of MODELS) {
+      r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (r.ok) break;
+      let detail = '';
+      try { const e = await r.json(); detail = String((e.error && (e.error.status + ': ' + e.error.message)) || '').slice(0, 220); } catch (e) { /* sin detalle */ }
+      failures.push({ model, status: r.status, detail });
+      if (![403, 404, 429, 503].includes(r.status)) break;
+    }
+    if (!r || !r.ok) {
       res.statusCode = 502;
-      return res.end(JSON.stringify({ error: 'upstream', status: r.status }));
+      return res.end(JSON.stringify({ error: 'upstream', status: r ? r.status : 0, failures }));
     }
     const j = await r.json();
     const cand = j.candidates && j.candidates[0];
