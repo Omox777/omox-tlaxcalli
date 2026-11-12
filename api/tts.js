@@ -59,6 +59,14 @@ async function call(key, voice, text) {
   }
 }
 
+async function detailOf(r) {
+  try {
+    const e = await r.json();
+    const d = e.detail || e;
+    return String(typeof d === 'string' ? d : [d.status, d.message].filter(Boolean).join(' · ') || JSON.stringify(d)).slice(0, 300);
+  } catch (err) { return ''; }
+}
+
 async function firstVoice(key) {
   const r = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': key } });
   if (!r.ok) return null;
@@ -92,14 +100,26 @@ async function handler(req, res) {
   if (!text) return fail(res, 400, 'bad_request');
 
   try {
-    let r = await call(key, fallbackVoice || VOICE, text);
-    if ((r.status === 404 || r.status === 400) && !fallbackVoice) {
+    let used = fallbackVoice || VOICE;
+    let r = await call(key, used, text);
+    let detail = '';
+
+    // La voz elegida no se pudo usar (no existe, es de la Voice Library y tu plan no la permite por API, etc.):
+    // se prueba con la primera voz de tu cuenta para que Omox no se quede callado.
+    if (!r.ok && [400, 402, 403, 404, 422].includes(r.status) && !fallbackVoice) {
+      detail = await detailOf(r);
+      console.error('[tts] ElevenLabs rechazó la voz ' + used + ': ' + r.status + ' ' + detail + ' → probando otra voz de tu cuenta');
       const alt = await firstVoice(key);
-      if (alt && alt !== VOICE) { fallbackVoice = alt; r = await call(key, alt, text); }
+      if (alt && alt !== used) {
+        fallbackVoice = alt; used = alt; detail = '';
+        r = await call(key, alt, text);
+        if (r.ok) console.error('[tts] Usando la voz ' + alt + ' en su lugar. Revisa ELEVENLABS_VOICE_ID.');
+      }
     }
+
     if (!r.ok) {
-      let detail = '';
-      try { const e = await r.json(); detail = String((e.detail && (e.detail.status || e.detail.message)) || e.detail || '').slice(0, 160); } catch (e) { /* sin detalle */ }
+      if (!detail) detail = await detailOf(r);
+      console.error('[tts] ElevenLabs respondió ' + r.status + ': ' + (detail || 'sin detalle') + ' (voz ' + used + ', modelo ' + MODEL + ')');
       res.statusCode = r.status === 401 ? 401 : r.status === 429 ? 429 : 502;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.end(JSON.stringify({ error: 'upstream', status: r.status, detail }));
@@ -110,6 +130,7 @@ async function handler(req, res) {
     res.setHeader('Content-Length', audio.length);
     return res.end(audio);
   } catch (e) {
+    console.error('[tts] No se pudo conectar con ElevenLabs: ' + (e && e.name === 'AbortError' ? 'tardó más de ' + TIMEOUT_MS / 1000 + ' s' : (e && e.message) || e));
     return fail(res, 502, 'network');
   }
 }
