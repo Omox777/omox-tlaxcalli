@@ -3,8 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#06090D">
 <title>Omox Tlaxcalli · Tu tutor que te enseña a pensar</title>
 <meta name="description" content="Omox Tlaxcalli es un asistente virtual con IA que enseña con pistas y preguntas, se adapta a tu forma de aprender y no hace la tarea por ti.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -126,6 +130,7 @@
       <li><b>Datos:</b> solo se usan tu edad y nivel de estudios para adaptar las explicaciones. No se pide nombre, escuela, teléfono ni correo.</li>
       <li><b>Conversaciones:</b> no se guardan en ninguna base de datos. Se envían al modelo de IA para generar la respuesta y se borran al cerrar la sesión.</li>
       <li><b>Transparencia:</b> las respuestas las genera un modelo de lenguaje (Gemini, de Google). Omox indica su nivel de confianza y qué debes verificar.</li>
+      <li><b>Voz:</b> cuando pides escuchar una respuesta, solo el texto de esa respuesta se envía a ElevenLabs para convertirlo en voz. No se envía tu voz ni tus datos.</li>
       <li><b>No sustituye a tu maestro/a:</b> sirve para comprender; la última palabra la tiene tu docente.</li>
       <li><b>Sin trampa:</b> Omox no resuelve tareas completas ni exámenes; te guía para que lo hagas tú.</li>
       <li><b>Originalidad:</b> el personaje Omox y el diseño son creaciones originales del equipo. No se usa material con derechos de autor sin autorización.</li>
@@ -135,6 +140,7 @@
 </dialog>
 
 <script src="demo.js"></script>
+<script src="omox-avatar.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

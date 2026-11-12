@@ -1,6 +1,6 @@
 // Servidor local para probar sin Vercel:  node server.js
-// Sirve /public y enruta POST /api/chat al mismo manejador que usa Vercel.
-// Opcional: copia .env.example a .env y pon tu GEMINI_API_KEY.
+// Sirve /public y enruta /api/chat y /api/tts a los mismos manejadores que usa Vercel.
+// Opcional: copia .env.example a .env y pon tu GEMINI_API_KEY y tu ELEVENLABS_API_KEY.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -13,14 +13,15 @@ try {
   });
 } catch (e) { /* sin .env */ }
 
-const handler = require('./api/chat');
+const ROUTES = { '/api/chat': require('./api/chat'), '/api/tts': require('./api/tts') };
 const PUB = path.join(__dirname, 'public');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TYPES = { '.mp3': 'audio/mpeg', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const PORT = process.env.PORT || 3000;
 
 http.createServer((req, res) => {
   const url = req.url.split('?')[0];
-  if (url === '/api/chat') {
+  const handler = ROUTES[url];
+  if (handler) {
     let raw = '';
     req.on('data', (c) => { raw += c; if (raw.length > 200000) req.destroy(); });
     req.on('end', () => {
@@ -37,4 +38,7 @@ http.createServer((req, res) => {
     res.setHeader('Content-Type', TYPES[path.extname(file)] || 'application/octet-stream');
     res.end(buf);
   });
-}).listen(PORT, () => console.log('Omox Tlaxcalli en http://localhost:' + PORT + (process.env.GEMINI_API_KEY ? '  (IA en vivo)' : '  (modo demostración: falta GEMINI_API_KEY)')));
+}).listen(PORT, () => {
+  console.log('Omox Tlaxcalli en http://localhost:' + PORT + (process.env.GEMINI_API_KEY ? '  (IA en vivo)' : '  (modo demostración: falta GEMINI_API_KEY)'));
+  console.log(process.env.ELEVENLABS_API_KEY ? 'Voz de Omox: ElevenLabs' : 'Voz de Omox: la del navegador (falta ELEVENLABS_API_KEY)');
+});

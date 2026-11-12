@@ -1,0 +1,17 @@
+# Nunca subir claves
+.env
+.env.local
+Clave*.txt
+*.key
+
+# No hacen falta en el sitio publicado
+node_modules
+docs
+test
+scripts
+Claude outputs
+*.docx
+~$*
+public/_respaldo_v1
+public/index-1.html
+public/styles-1.css

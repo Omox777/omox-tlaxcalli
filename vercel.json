@@ -1,4 +1,7 @@
 {
   "outputDirectory": "public",
-  "functions": { "api/chat.js": { "maxDuration": 60 } }
+  "functions": {
+    "api/chat.js": { "maxDuration": 60 },
+    "api/tts.js": { "maxDuration": 30 }
+  }
 }

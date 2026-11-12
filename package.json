@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "description": "Omox Tlaxcalli: asistente virtual con IA que enseña con pistas y se adapta al estudiante.",
   "private": true,
-  "scripts": { "start": "node server.js", "test": "node test/handler.test.js" },
-  "engines": { "node": ">=18" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/handler.test.js && node test/tts.test.js",
+    "voces": "node scripts/voces.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

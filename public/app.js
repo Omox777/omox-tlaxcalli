@@ -3,31 +3,9 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
 
-  // ---------- Avatar original de Omox (SVG propio) ----------
-  const AVATAR = `
-<svg class="omox idle" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Omox, el tutor">
-  <ellipse cx="100" cy="186" rx="52" ry="8" fill="#000" opacity=".12"/>
-  <rect x="62" y="128" width="76" height="52" rx="18" fill="#243b6b"/>
-  <path d="M62 150h76" stroke="#e0a22f" stroke-width="4"/>
-  <g> <!-- códice -->
-    <rect x="54" y="150" width="92" height="30" rx="5" fill="#fffaf0" stroke="#9c3c1e" stroke-width="3"/>
-    <path d="M100 150v30" stroke="#9c3c1e" stroke-width="3"/>
-    <path d="M62 160h28M62 168h22M110 160h28M110 168h22" stroke="#16807f" stroke-width="3" stroke-linecap="round"/>
-  </g>
-  <circle cx="100" cy="80" r="52" fill="#d98a5b"/>
-  <path d="M48 70a52 52 0 0 1 104 0z" fill="#2b1c14"/>
-  <rect x="46" y="62" width="108" height="16" rx="3" fill="#c4512d"/>
-  <path d="M46 70h108" stroke="#f7eedc" stroke-width="2" stroke-dasharray="6 4"/>
-  <path d="M60 58l8-14 8 14m8 0l8-18 8 18m8 0l8-14 8 14" fill="#16807f" stroke="#16807f" stroke-width="2" stroke-linejoin="round"/>
-  <g class="blink"><circle cx="80" cy="92" r="11" fill="#fff"/><circle cx="120" cy="92" r="11" fill="#fff"/></g>
-  <g class="pupils"><circle cx="82" cy="93" r="5" fill="#2b1c14"/><circle cx="122" cy="93" r="5" fill="#2b1c14"/>
-  <circle cx="84" cy="91" r="1.6" fill="#fff"/><circle cx="124" cy="91" r="1.6" fill="#fff"/></g>
-  <path d="M68 78q12-8 24 0M108 78q12-8 24 0" stroke="#2b1c14" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <circle cx="68" cy="108" r="6" fill="#c4512d" opacity=".35"/><circle cx="132" cy="108" r="6" fill="#c4512d" opacity=".35"/>
-  <path class="mouth-smile" d="M84 112q16 16 32 0" stroke="#2b1c14" stroke-width="4" fill="none" stroke-linecap="round"/>
-  <ellipse class="mouth-o" cx="100" cy="116" rx="6" ry="5" fill="#2b1c14"/>
-  <g class="dots" fill="#243b6b"><circle cx="150" cy="40" r="4"/><circle cx="162" cy="30" r="5"/><circle cx="176" cy="18" r="6"/></g>
-</svg>`;
+  // ---------- Avatar de Omox ----------
+  // El dibujo y las expresiones viven en omox-avatar.js (se carga antes que este archivo).
+  const Avatar = window.OmoxAvatar || { mount() {}, setMood() {}, react() {}, setLevel() {} };
 
   // ---------- Estado ----------
   const S = {
@@ -57,12 +35,20 @@
     return html;
   }
   function setFace(state) {
-    document.querySelectorAll('.omox').forEach((n) => {
-      n.classList.remove('idle', 'thinking', 'happy', 'talking');
-      n.classList.add(state);
-    });
+    // 'thinking' y 'talking' los detecta el avatar desde #status y la voz del navegador.
+    if (state === 'happy') Avatar.setMood('celebrate', 2600);
+    else if (state === 'idle' || state === 'thinking') Avatar.setMood(null);
     const st = { idle: 'Listo para ayudarte', thinking: 'Pensando…', happy: '¡Muy bien!', talking: 'Hablando…' };
     $('status').textContent = st[state] || '';
+  }
+  // Elige la expresión de Omox según lo que respondió la IA.
+  function reactTo(data, gained, prevHint) {
+    if (gained >= 15) return setFace('happy');
+    setFace('idle');
+    if (data.confidence === 'baja' || data.verify_note) Avatar.setMood('confused', 3200);
+    else if (S.mode === 'learn' && data.hint_level > prevHint) Avatar.setMood('encourage', 3500);
+    else if (S.mode === 'teach') Avatar.setMood('curious', 3500);
+    else Avatar.react(data.reply);
   }
 
   // ---------- Render ----------
@@ -154,14 +140,76 @@
   }
 
   // ---------- Voz ----------
-  function speak(text) {
-    if (!('speechSynthesis' in window)) { addSys('Tu navegador no admite lectura en voz alta.'); return; }
-    window.speechSynthesis.cancel();
-    const clean = String(text).replace(/\*\*/g, '').replace(/`/g, '');
-    const u = new SpeechSynthesisUtterance(clean);
+  // Primero intenta la voz de ElevenLabs (vía /api/tts, la clave nunca llega aquí).
+  // Si no hay clave o falla, usa la voz del navegador.
+  const Voice = { remote: null, audio: null, ctx: null, raf: 0, cache: new Map(), token: 0 };
+
+  function stopVoice() {
+    Voice.token++;
+    if (Voice.audio) { Voice.audio.onended = Voice.audio.onerror = null; Voice.audio.pause(); Voice.audio = null; }
+    cancelAnimationFrame(Voice.raf); Avatar.setLevel && Avatar.setLevel(null);
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  // Sincroniza la boca de Omox con el volumen real del audio.
+  function lipSync(audio) {
+    try {
+      Voice.ctx = Voice.ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (Voice.ctx.state === 'suspended') Voice.ctx.resume();
+      const src = Voice.ctx.createMediaElementSource(audio);
+      const an = Voice.ctx.createAnalyser(); an.fftSize = 512;
+      src.connect(an); an.connect(Voice.ctx.destination);
+      const buf = new Uint8Array(an.fftSize);
+      const loop = () => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        Avatar.setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 5));
+        Voice.raf = requestAnimationFrame(loop);
+      };
+      loop();
+    } catch (e) { /* sin Web Audio: la boca usa la animación normal */ }
+  }
+
+  async function speakRemote(text, token) {
+    let url = Voice.cache.get(text);
+    if (!url) {
+      $('status').textContent = 'Preparando voz…';
+      const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (!r.ok) { if (r.status === 503 || r.status === 401 || r.status === 404) Voice.remote = false; throw new Error('tts ' + r.status); }
+      url = URL.createObjectURL(await r.blob());
+      Voice.cache.set(text, url);
+      if (Voice.cache.size > 20) { const [k, u] = Voice.cache.entries().next().value; URL.revokeObjectURL(u); Voice.cache.delete(k); }
+    }
+    if (token !== Voice.token) return;
+    const audio = new Audio(url);
+    Voice.audio = audio;
+    lipSync(audio);
+    audio.onplay = () => setFace('talking');
+    audio.onended = audio.onerror = () => { cancelAnimationFrame(Voice.raf); Avatar.setLevel(null); Voice.audio = null; setFace('idle'); };
+    await audio.play();
+  }
+
+  function speakBrowser(text) {
+    if (!('speechSynthesis' in window)) { addSys('Tu navegador no admite lectura en voz alta.'); setFace('idle'); return; }
+    const u = new SpeechSynthesisUtterance(text);
     u.lang = 'es-MX'; u.rate = 0.95;
+    const voces = window.speechSynthesis.getVoices();
+    const v = voces.find((x) => x.lang === 'es-MX') || voces.find((x) => x.lang.startsWith('es'));
+    if (v) u.voice = v;
     u.onstart = () => setFace('talking'); u.onend = () => setFace('idle'); u.onerror = () => setFace('idle');
     window.speechSynthesis.speak(u);
+  }
+
+  async function speak(text) {
+    stopVoice();
+    Avatar.setMood(null); // deja ver 'pensando' mientras llega el audio y luego 'hablando'
+    const token = Voice.token;
+    const clean = String(text).replace(/\*\*/g, '').replace(/`/g, '');
+    if (Voice.remote !== false) {
+      try { await speakRemote(clean, token); return; }
+      catch (e) { if (token !== Voice.token) return; setFace('idle'); }
+    }
+    speakBrowser(clean);
   }
   let rec = null;
   function mic() {
@@ -214,6 +262,7 @@
   async function send(text) {
     text = String(text || '').trim();
     if (!text || S.busy || !S.profile) return;
+    stopVoice();
     S.busy = true; $('btnSend').disabled = true; $('input').value = ''; autosize(); renderChips([]);
     const fmt = S.nextFormat; S.nextFormat = null;
     addMe(text);
@@ -228,6 +277,7 @@
       const data = await askAI(text);
       rmTyping();
       S.history.push({ role: 'model', text: data.reply });
+      const prevHint = S.hint;
       if (S.mode === 'learn') S.hint = data.hint_level;
       const prev = S.understanding; S.understanding = data.understanding;
       if (data.style_signal && data.style_signal !== 'neutral') S.style[data.style_signal]++;
@@ -236,18 +286,19 @@
       $('topic').textContent = data.topic || '';
       renderLadder(); renderMeter(); renderStyle(); renderTransparency(data); renderMissing(data.missing_concepts);
       renderChips(data.quick_replies);
-      setFace(S.understanding - prev >= 15 ? 'happy' : 'idle');
-      if (S.understanding - prev >= 15) setTimeout(() => setFace('idle'), 1500);
+      reactTo(data, S.understanding - prev, prevHint);
+      if (S.understanding - prev >= 15) setTimeout(() => { if ($('status').textContent === '¡Muy bien!') $('status').textContent = 'Listo para ayudarte'; }, 2600);
       if (fmt === 'auditivo') speak(data.reply);
       safeSet('omox_style', S.style);
     } catch (e) {
-      rmTyping(); S.history.pop(); addSys(e.message || 'Ocurrió un error. Intenta de nuevo.'); setFace('idle');
+      rmTyping(); S.history.pop(); addSys(e.message || 'Ocurrió un error. Intenta de nuevo.'); setFace('idle'); Avatar.setMood('confused', 2500);
     }
     S.busy = false; $('btnSend').disabled = false; $('input').focus();
   }
 
   // ---------- Modos ----------
   function setMode(m) {
+    stopVoice();
     S.mode = m;
     $('modeLearn').classList.toggle('active', m === 'learn');
     $('modeTeach').classList.toggle('active', m === 'teach');
@@ -269,7 +320,7 @@
 
   // ---------- Inicio ----------
   function start() {
-    $('brandAvatar').innerHTML = AVATAR; $('avatar').innerHTML = AVATAR; $('dlgAvatar').innerHTML = AVATAR;
+    ['brandAvatar', 'avatar', 'dlgAvatar'].forEach((id) => Avatar.mount($(id)));
     const sv = safeGet('omox_style'); if (sv) S.style = sv;
     $('composer').addEventListener('submit', (e) => { e.preventDefault(); send($('input').value); });
     $('input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send($('input').value); } });
@@ -293,6 +344,8 @@
     renderLadder(); renderMeter(); renderStyle(); setFace('idle');
     $('dlgStart').showModal();
     // Detecta si hay IA en vivo (sin consumir cuota): el servidor responde 405 a GET si existe.
+    fetch('/api/tts', { method: 'GET' }).then((r) => (r.ok ? r.json() : { live: false }))
+      .then((j) => { Voice.remote = j.live ? null : false; }).catch(() => { Voice.remote = false; });
     fetch('/api/chat', { method: 'GET' }).then((r) => (r.ok ? r.json() : { live: false }))
       .then((j) => setDemoQuiet(!j.live)).catch(() => setDemoQuiet(true));
   }
